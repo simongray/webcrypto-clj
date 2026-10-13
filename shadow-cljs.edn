@@ -1,0 +1,16 @@
+{:deps     {:aliases [:cljs]}
+ ;; the browser tests and the vectors in dev-resources, on localhost,
+ ;; where WebCrypto works
+ :dev-http {8021 {:roots ["target/browser-test" "."] :host "localhost"}}
+ :builds   {;; clojure -M:cljs compile test
+            :test         {:target    :node-test
+                           :output-to "target/node-tests.js"
+                           :ns-regexp "-test$"
+                           :autorun   true}
+            ;; clojure -M:cljs watch browser-test, then open
+            ;; http://localhost:8021
+            :browser-test {:target     :browser-test
+                           :test-dir   "target/browser-test"
+                           :ns-regexp  "-test$"
+                           ;; the vectors come over HTTP in a browser
+                           :js-options {:resolve {"fs" false}}}}}
