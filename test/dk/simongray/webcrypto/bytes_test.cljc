@@ -91,7 +91,15 @@
     (is (= "﻿A" (bytes/decode (bytes/of [0xEF 0xBB 0xBF 0x41])))))
   (testing "bytes that aren't UTF-8 become U+FFFD"
     (is (= "a�b" (bytes/decode (bytes/of [0x61 0xC0 0x62]))))
-    (is (= "�" (bytes/decode (bytes/of [0xE2 0x82]))))))
+    (is (= "�" (bytes/decode (bytes/of [0xE2 0x82])))))
+  (testing "only text encodes, which TextEncoder would take nil as the text null"
+    (doseq [x [nil 42 :a (bytes/of [1])]]
+      (is (= :dk.simongray.webcrypto/type-error
+             (try (bytes/encode x)
+                  nil
+                  (catch #?(:clj Exception :cljs :default) e
+                    (:type (ex-data e)))))
+          (pr-str x)))))
 
 (deftest bytes-on-both-platforms
   (is (bytes/bytes? (bytes/of [1 2 3])))

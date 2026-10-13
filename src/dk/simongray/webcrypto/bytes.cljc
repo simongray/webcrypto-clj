@@ -80,9 +80,15 @@
 
 ;; RFC 3629, and the Encoding Standard, section 9.1, for TextEncoder
 (defn encode
-  "The bytes of the text `s` in UTF-8. A lone surrogate, which UTF-8 can't
-  hold, becomes U+FFFD on both platforms, as with TextEncoder."
+  "The bytes of the text `s` in UTF-8, or a throw of type-error when `s`
+  isn't a string. A lone surrogate, which UTF-8 can't hold, becomes U+FFFD
+  on both platforms, as with TextEncoder."
   [s]
+  ;; TextEncoder would encode nil as the text null, where the JDK throws an
+  ;; exception of its own
+  (when-not (string? s)
+    (throw (ex-info "The text to encode is a string"
+                    {:type :dk.simongray.webcrypto/type-error})))
   #?(:clj  (let [encoder (-> StandardCharsets/UTF_8
                              .newEncoder
                              (.onMalformedInput CodingErrorAction/REPLACE)
