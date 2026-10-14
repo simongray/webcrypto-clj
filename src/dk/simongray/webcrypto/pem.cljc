@@ -66,6 +66,34 @@
       private? (der/write-private-key-info (der/oids :rsa-encryption) (der/null) private-key)
       :else    (der/write-spki (der/oids :rsa-encryption) (der/null) public-key))))
 
+(def kinds
+  "The kind of key of each object identifier of an algorithm of SPKI and
+  PKCS#8 that key-data names."
+  {(der/oids :rsa-encryption) :rsa
+   (der/oids :ec-public-key)  :ec
+   (der/oids :ed25519)        :ed25519})
+
+(def curves
+  "The named curve of each object identifier of an EC key's curve."
+  {(der/oids :secp256r1) :p-256
+   (der/oids :secp384r1) :p-384
+   (der/oids :secp521r1) :p-521})
+
+;; RFC 5480, section 2.1.1, and RFC 8410, section 3
+(defn- with-kind
+  "The `key-data` with the :kind of key that its SPKI or PKCS#8 holds, and
+  the :named-curve of an EC key, when the library knows them."
+  [{:keys [format data] :as key-data}]
+  (let [{:keys [algorithm parameters]} (if (= :spki format)
+                                         (der/spki data)
+                                         (der/private-key-info data))
+        kind                           (kinds algorithm)
+        curve                          (when (and (= :ec kind) parameters)
+                                         (curves (der/read-oid parameters)))]
+    (cond-> key-data
+      kind  (assoc :kind kind)
+      curve (assoc :named-curve curve))))
+
 ;; RFC 8017, Appendix A.1, and RFC 5915, section 3
 (defn- key-data-of
   "The key data of the PEM `block` as a map of :format and :data, or nil
@@ -96,10 +124,13 @@
     PKCS#8
   - EC PRIVATE KEY of SEC1, which becomes PKCS#8
 
-  A key that isn't valid DER throws data-error.
+  The map also has the :kind of key, :rsa, :ec or :ed25519, and the
+  :named-curve of an EC key, e.g. :p-256, when the library knows them. They
+  tell which algorithm to import a key for, since import-key needs one. A
+  key that isn't valid DER throws data-error.
 
       (let [{:keys [format data]} (key-data (slurp \"key.pem\"))]
         (webcrypto/import-key format data {:name :ecdsa :named-curve :p-256}
                               false [:sign]))"
   [s]
-  (some key-data-of (decode s)))
+  (some-> (some key-data-of (decode s)) with-kind))

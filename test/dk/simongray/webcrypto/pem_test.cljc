@@ -64,6 +64,25 @@
                    (then (partial webcrypto/export-key format))
                    (then (fn [exported] (is (= (bytes/hex data) (bytes/hex exported)) (name k)))))))))
 
+(deftest kinds
+  (is (= {:rsa-public       {:kind :rsa}
+          :rsa-private      {:kind :rsa}
+          :rsa-pss-public   {:kind :rsa}
+          :rsa-pss-private  {:kind :rsa}
+          :ecc-p256-public  {:kind :ec :named-curve :p-256}
+          :ecc-p256-private {:kind :ec :named-curve :p-256}
+          :ed25519-public   {:kind :ed25519}
+          :ed25519-private  {:kind :ed25519}}
+         (update-vals fixtures/rfc-9421 #(select-keys (pem/key-data %) [:kind :named-curve]))))
+  (is (= {:kind :ec :named-curve :p-384}
+         (-> (der/write-spki (der/oids :ec-public-key) (der/oid (der/oids :secp384r1))
+                             (bytes/of (cons 4 (range 96))))
+             (->> (pem/encode "PUBLIC KEY"))
+             pem/key-data
+             (select-keys [:kind :named-curve]))))
+  (is (nil? (:kind (pem/key-data (pem/encode "PUBLIC KEY" (der/write-spki "1.3.101.110" nil (bytes/of (range 32)))))))
+      "an X25519 key, whose kind the library doesn't name"))
+
 ;; RFC 4055, section 1.2
 (deftest rsa-pss-keys
   (let [oid-of #(:algorithm (der/private-key-info %))

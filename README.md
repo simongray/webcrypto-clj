@@ -212,6 +212,9 @@ its own:
   (webcrypto/import-key format data {:name :rsa-pss :hash :sha-512} false [:sign]))
 ```
 
+The key data also says what kind of key it holds, e.g. `{:kind :ec
+:named-curve :p-256}`, for a key whose algorithm you don't know yet.
+
 Errors
 ------
 
