@@ -64,11 +64,13 @@
                    (then (partial webcrypto/export-key format))
                    (then (fn [exported] (is (= (bytes/hex data) (bytes/hex exported)) (name k)))))))))
 
+;; RFC 9421 gives the public key of test-key-rsa-pss under rsaEncryption,
+;; and only its private key under RSASSA-PSS
 (deftest kinds
   (is (= {:rsa-public       {:kind :rsa}
           :rsa-private      {:kind :rsa}
           :rsa-pss-public   {:kind :rsa}
-          :rsa-pss-private  {:kind :rsa}
+          :rsa-pss-private  {:kind :rsa-pss}
           :ecc-p256-public  {:kind :ec :named-curve :p-256}
           :ecc-p256-private {:kind :ec :named-curve :p-256}
           :ed25519-public   {:kind :ed25519}
@@ -89,7 +91,9 @@
         s      (:rsa-pss-private fixtures/rfc-9421)]
     (is (= (der/oids :rsassa-pss) (oid-of (:der (first (pem/decode s))))))
     (is (= (der/oids :rsa-encryption) (oid-of (:data (pem/key-data s))))
-        "a key of RSASSA-PSS imports as a key of rsaEncryption")))
+        "a key of RSASSA-PSS imports as a key of rsaEncryption")
+    (is (= :rsa-pss (:kind (pem/key-data s)))
+        "but says that it's for RSA-PSS alone")))
 
 (deftest not-keys
   (let [{:keys [d public-key]} (der/ec-private-key

@@ -52,24 +52,11 @@
   []
   (der/sequence-of (der/oid (der/oids :rsa-encryption)) (der/null)))
 
-;; RFC 4055, section 1.2: a key of RSASSA-PSS is an RSA key, which
-;; WebCrypto imports under rsaEncryption
-(defn- rsa-encryption-key
-  "The PrivateKeyInfo or SubjectPublicKeyInfo `der` under rsaEncryption,
-  when it's a key of RSASSA-PSS, or else as it is."
-  [der private?]
-  (let [{:keys [algorithm private-key public-key]} (if private?
-                                                     (der/private-key-info der)
-                                                     (der/spki der))]
-    (cond
-      (not= (der/oids :rsassa-pss) algorithm) der
-      private? (der/write-private-key-info (der/oids :rsa-encryption) (der/null) private-key)
-      :else    (der/write-spki (der/oids :rsa-encryption) (der/null) public-key))))
-
 (def kinds
   "The kind of key of each object identifier of an algorithm of SPKI and
   PKCS#8 that key-data names."
   {(der/oids :rsa-encryption) :rsa
+   (der/oids :rsassa-pss)     :rsa-pss
    (der/oids :ec-public-key)  :ec
    (der/oids :ed25519)        :ed25519})
 
@@ -94,14 +81,28 @@
       kind  (assoc :kind kind)
       curve (assoc :named-curve curve))))
 
+;; RFC 4055, section 1.2: a key of RSASSA-PSS is an RSA key, which
+;; WebCrypto imports under rsaEncryption alone
+(defn- under-rsa-encryption
+  "The `key-data` of a key of RSASSA-PSS with its SPKI or PKCS#8 under
+  rsaEncryption, or else as it is."
+  [{:keys [format data kind] :as key-data}]
+  (if (= :rsa-pss kind)
+    (assoc key-data :data (if (= :spki format)
+                            (der/write-spki (der/oids :rsa-encryption) (der/null)
+                                            (:public-key (der/spki data)))
+                            (der/write-private-key-info (der/oids :rsa-encryption) (der/null)
+                                                        (:private-key (der/private-key-info data)))))
+    key-data))
+
 ;; RFC 8017, Appendix A.1, and RFC 5915, section 3
 (defn- key-data-of
   "The key data of the PEM `block` as a map of :format and :data, or nil
   when the block isn't a key."
   [{:keys [label der]}]
   (case label
-    "PUBLIC KEY"      {:format :spki :data (rsa-encryption-key der false)}
-    "PRIVATE KEY"     {:format :pkcs8 :data (rsa-encryption-key der true)}
+    "PUBLIC KEY"      {:format :spki :data der}
+    "PRIVATE KEY"     {:format :pkcs8 :data der}
     "RSA PUBLIC KEY"  {:format :spki
                        :data   (der/sequence-of (rsa-encryption) (der/bit-string der))}
     "RSA PRIVATE KEY" {:format :pkcs8
@@ -124,13 +125,15 @@
     PKCS#8
   - EC PRIVATE KEY of SEC1, which becomes PKCS#8
 
-  The map also has the :kind of key, :rsa, :ec or :ed25519, and the
-  :named-curve of an EC key, e.g. :p-256, when the library knows them. They
-  tell which algorithm to import a key for, since import-key needs one. A
-  key that isn't valid DER throws data-error.
+  The map also has the :kind of key, :rsa, :rsa-pss, :ec or :ed25519, and
+  the :named-curve of an EC key, e.g. :p-256, when the library knows them.
+  They tell which algorithm to import a key for, since import-key needs
+  one. A key of RSASSA-PSS (RFC 4055) is :rsa-pss, for RSA-PSS alone,
+  although its data is under rsaEncryption. A key that isn't valid DER
+  throws data-error.
 
       (let [{:keys [format data]} (key-data (slurp \"key.pem\"))]
         (webcrypto/import-key format data {:name :ecdsa :named-curve :p-256}
                               false [:sign]))"
   [s]
-  (some-> (some key-data-of (decode s)) with-kind))
+  (some-> (some key-data-of (decode s)) with-kind under-rsa-encryption))

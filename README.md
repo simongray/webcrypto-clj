@@ -213,7 +213,9 @@ its own:
 ```
 
 The key data also says what kind of key it holds, e.g. `{:kind :ec
-:named-curve :p-256}`, for a key whose algorithm you don't know yet.
+:named-curve :p-256}`, for a key whose algorithm you don't know yet. A key
+that OpenSSL marks as RSASSA-PSS is `{:kind :rsa-pss}`, for RSA-PSS alone,
+though it imports like any other RSA key.
 
 Errors
 ------
