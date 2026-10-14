@@ -210,11 +210,14 @@
      `point`, or of the point it computes when that's nil. It throws
      data-error when the point isn't the private value's."
      [curve d point]
-     (let [private (private-key-of curve d)
-           public  (if point (decode-point curve point) (public-of-private curve private))]
-       (errors/check (pair? private public) :data-error
-                     "The public key isn't the private key's")
-       (KeyPair. public private))))
+     (let [private (private-key-of curve d)]
+       (if point
+         (let [public (decode-point curve point)]
+           (errors/check (pair? private public) :data-error
+                         "The public key isn't the private key's")
+           (KeyPair. public private))
+         ;; a point that public-of-private computes is the private key's
+         (KeyPair. (public-of-private curve private) private)))))
 
 (def jca-hashes
   "The name of each hash in the names of the JCA's signatures."

@@ -540,6 +540,26 @@
                                                 message)))))
               (then (fn [verified] (is (false? verified) "an R of small order")))))))
 
+(defn without-point
+  "The PKCS#8 bytes `pkcs8` of an EC key without the public key in its
+  ECPrivateKey."
+  [pkcs8]
+  (let [{:keys [algorithm parameters private-key]} (der/private-key-info pkcs8)]
+    (der/write-private-key-info algorithm (der/oid (der/read-oid parameters))
+                                (der/sequence-of (der/small-integer 1)
+                                                 (der/octet-string (:d (der/ec-private-key private-key)))))))
+
+;; RFC 5915, section 3: the public key is optional, e.g. in the PKCS#8 of
+;; the JDK, so the import computes it
+(deftest points-of-private-keys
+  (run #(all (for [{:keys [made-on algorithm jwk pkcs8]} fixtures/made-elsewhere
+                   :when (:named-curve algorithm)
+                   :let [why                (str (algorithm-name algorithm) " made on " (name made-on))
+                         [private-usages _] (usages-of (algorithm-name algorithm))]]
+               (-> (webcrypto/import-key :pkcs8 (without-point (hex pkcs8)) algorithm true private-usages)
+                   (then (partial exported :jwk))
+                   (then (fn [computed] (is (= (select-keys jwk [:x :y]) (select-keys computed [:x :y])) why))))))))
+
 ;; SEC 1, section 2.3.3, where 02 or 03 says whether y is even or odd
 (deftest compressed-points
   (let [compressed (bytes/concat (bytes/of [(if (odd? (bytes/at point 64)) 3 2)])
